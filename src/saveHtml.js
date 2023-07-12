@@ -1,28 +1,70 @@
 import axios from 'axios';
 import path from 'path';
-import fs from 'fs/promises';
-import https from 'https';
+import fsp from 'fs/promises';
+import { load } from 'cheerio';
+import noop from './utils/noop.js';
+import removeFileExtension from './utils/removeFileExtension.js';
+import getFileNameFromUrl from './utils/getFileNameFromUrl.js';
 
-const getFileNameFromUrl = (url) => {
-  const { hostname, pathname } = new URL(url);
+class PageLoader {
+  constructor(url, options) {
+    const { origin } = new URL(url);
 
-  const fileName = `${hostname}${pathname}`.replace(/[^\w\d]/g, '-');
+    this.domain = origin;
+    this.url = url;
+    this.dir = options.output ?? process.cwd();
+    this.fileName = getFileNameFromUrl(url);
+  }
 
-  return `${fileName}.html`;
+  normalizeUrl(url) {
+    const isRelativeUrl = !(url.startsWith('http://') || url.startsWith('https://'));
+
+    return isRelativeUrl ? this.domain + url : url;
+  }
+
+  async saveImages(html) {
+    const filesDir = `${removeFileExtension(this.fileName)}_files`;
+    const filesAbsoluteDir = path.join(this.dir, filesDir);
+
+    await fsp.mkdir(filesAbsoluteDir).catch(noop);
+
+    const $ = load(html);
+    const images = $('img');
+
+    const promises = images.map(async (_, el) => {
+      const src = this.normalizeUrl($(el).attr('src'));
+
+      const fileName = getFileNameFromUrl(src);
+      const outputFile = path.join(filesAbsoluteDir, fileName);
+
+      const { data } = await axios.get(src, {
+        responseType: 'arraybuffer',
+      });
+
+      await fsp.writeFile(outputFile, data);
+
+      const newSrc = path.join(filesDir, fileName);
+      $(el).attr('src', newSrc);
+    });
+
+    await Promise.all(promises);
+
+    return $.html();
+  }
+
+  async saveHtml() {
+    const outputFile = path.join(this.dir, this.fileName);
+
+    const { data } = await axios.get(this.url);
+
+    const html = await this.saveImages(data);
+
+    await fsp.writeFile(outputFile, html);
+  }
+}
+
+export default async (url, options) => {
+  const pageLoader = new PageLoader(url, options);
+
+  await pageLoader.saveHtml();
 };
-
-const saveHtml = async (url, options) => {
-  const dir = options.output ?? process.cwd();
-  const fileName = getFileNameFromUrl(url);
-  const outputFile = path.join(dir, fileName);
-
-  const httpAgent = new https.Agent({
-    rejectUnauthorized: false,
-  });
-
-  const { data } = await axios.get(url, { httpAgent });
-
-  fs.writeFile(outputFile, data);
-};
-
-export default saveHtml;

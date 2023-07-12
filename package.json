@@ -4,7 +4,8 @@
   "description": "[![Actions Status](https://github.com/aposohin98/js-async-project-4/workflows/hexlet-check/badge.svg)](https://github.com/aposohin98/js-async-project-4/actions)",
   "main": "index.js",
   "scripts": {
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "test:watch": "jest --watch"
   },
   "repository": {
     "type": "git",
@@ -22,6 +23,7 @@
   },
   "dependencies": {
     "axios": "^1.4.0",
+    "cheerio": "^1.0.0-rc.12",
     "commander": "^11.0.0",
     "nock": "^13.3.1"
   },
